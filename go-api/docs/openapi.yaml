@@ -1,0 +1,247 @@
+openapi: 3.0.3
+info:
+  title: Go API
+  version: 1.0.0
+  description: >
+    Orquestador público. Recibe una matriz rectangular, calcula la factorización QR
+    con Gonum y solicita estadísticas a Node.js.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Health
+  - name: Matrices
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness
+      description: Indica que el proceso Go está activo. No consulta a Node.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Servicio activo
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                success: true
+                data:
+                  service: go-api
+                  status: ok
+                meta:
+                  requestId: 2b7790d2-9534-404d-8f0d-1dec864c1d99
+  /api/v1/matrices/qr:
+    post:
+      tags: [Matrices]
+      summary: Factorización QR y estadísticas
+      description: >
+        Valida la matriz, calcula Q y R (Gonum exige m ≥ n) y llama a
+        POST /api/v1/statistics en Node. Las estadísticas se calculan sobre Q ∪ R,
+        no sobre la matriz original.
+      operationId: postMatrixQR
+      parameters:
+        - name: X-Request-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Si se omite, Go genera un UUID y lo propaga a Node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatrixRequest"
+            example:
+              matrix:
+                - [12, -51, 4]
+                - [6, 167, -68]
+                - [-4, 24, -41]
+      responses:
+        "200":
+          description: QR y estadísticas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QRSuccessResponse"
+        "400":
+          description: Validación de entrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingMatrix:
+                  value:
+                    success: false
+                    error:
+                      code: MATRIX_REQUIRED
+                      message: The property matrix is required.
+                    meta:
+                      requestId: err-1
+        "404":
+          description: Ruta no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Matriz válida pero no factorizable con Gonum QR (por ejemplo m < n)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: UNSUPPORTED_MATRIX_DIMENSIONS
+                  message: QR factorization requires a matrix with at least as many rows as columns (m >= n).
+                meta:
+                  requestId: err-1
+        "502":
+          description: Node respondió 4xx/5xx o un cuerpo inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Node no está disponible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: STATISTICS_SERVICE_UNAVAILABLE
+                  message: The statistics service is unavailable.
+                meta:
+                  requestId: challenge-test-001
+        "504":
+          description: Timeout al llamar a Node
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    Matrix:
+      type: array
+      minItems: 1
+      items:
+        type: array
+        minItems: 1
+        items:
+          type: number
+    MatrixRequest:
+      type: object
+      required: [matrix]
+      properties:
+        matrix:
+          $ref: "#/components/schemas/Matrix"
+    Factorization:
+      type: object
+      required: [q, r]
+      properties:
+        q:
+          $ref: "#/components/schemas/Matrix"
+        r:
+          $ref: "#/components/schemas/Matrix"
+    StatisticsResult:
+      type: object
+      required: [max, min, average, sum]
+      properties:
+        max:
+          type: number
+        min:
+          type: number
+        average:
+          type: number
+        sum:
+          type: number
+    DiagonalResult:
+      type: object
+      required: [q, r, anyDiagonal]
+      properties:
+        q:
+          type: boolean
+        r:
+          type: boolean
+        anyDiagonal:
+          type: boolean
+    QRResponseData:
+      type: object
+      required: [originalMatrix, factorization, statistics, diagonal]
+      properties:
+        originalMatrix:
+          $ref: "#/components/schemas/Matrix"
+        factorization:
+          $ref: "#/components/schemas/Factorization"
+        statistics:
+          $ref: "#/components/schemas/StatisticsResult"
+        diagonal:
+          $ref: "#/components/schemas/DiagonalResult"
+    Meta:
+      type: object
+      required: [requestId]
+      properties:
+        requestId:
+          type: string
+    QRSuccessResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: "#/components/schemas/QRResponseData"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    HealthResponse:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          required: [service, status]
+          properties:
+            service:
+              type: string
+              example: go-api
+            status:
+              type: string
+              example: ok
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ErrorResponse:
+      type: object
+      required: [success, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        meta:
+          $ref: "#/components/schemas/Meta"

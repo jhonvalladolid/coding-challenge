@@ -1,0 +1,230 @@
+openapi: 3.0.3
+info:
+  title: Node API
+  version: 1.0.0
+  description: >
+    Servicio interno de estadísticas. Recibe las matrices Q y R y calcula
+    máximo, mínimo, promedio, suma y diagonalidad con tolerancia epsilon.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Health
+  - name: Statistics
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: getHealth
+      responses:
+        "200":
+          description: Servicio activo
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                success: true
+                data:
+                  status: ok
+                  service: node-api
+  /api/v1/statistics:
+    post:
+      tags: [Statistics]
+      summary: Estadísticas sobre Q y R
+      description: >
+        Calcula max, min, average y sum sobre todos los valores de Q y R juntos.
+        Una matriz es diagonal si |a[i][j]| <= DIAGONAL_EPSILON para todo i ≠ j.
+      operationId: postStatistics
+      parameters:
+        - name: X-Request-ID
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatisticsRequest"
+            example:
+              matrices:
+                q:
+                  - [1, 0]
+                  - [0, 1]
+                r:
+                  - [2, 3]
+                  - [0, 4]
+      responses:
+        "200":
+          description: Estadísticas calculadas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticsSuccessResponse"
+              example:
+                success: true
+                data:
+                  statistics:
+                    max: 4
+                    min: 0
+                    average: 1.375
+                    sum: 11
+                  diagonal:
+                    q: true
+                    r: false
+                    anyDiagonal: true
+        "400":
+          description: Validación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: The request body is invalid
+                  details:
+                    - field: matrices.q
+                      reason: matrices.q is required
+                  requestId: err-1
+        "404":
+          description: Ruta no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Método no permitido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Payload o dimensión excesiva
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Content-Type distinto de application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    Matrix:
+      type: array
+      minItems: 1
+      items:
+        type: array
+        minItems: 1
+        items:
+          type: number
+    StatisticsRequest:
+      type: object
+      required: [matrices]
+      properties:
+        matrices:
+          type: object
+          required: [q, r]
+          properties:
+            q:
+              $ref: "#/components/schemas/Matrix"
+            r:
+              $ref: "#/components/schemas/Matrix"
+    StatisticsResult:
+      type: object
+      required: [max, min, average, sum]
+      properties:
+        max:
+          type: number
+        min:
+          type: number
+        average:
+          type: number
+        sum:
+          type: number
+    DiagonalResult:
+      type: object
+      required: [q, r, anyDiagonal]
+      properties:
+        q:
+          type: boolean
+        r:
+          type: boolean
+        anyDiagonal:
+          type: boolean
+    StatisticsSuccessResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          required: [statistics, diagonal]
+          properties:
+            statistics:
+              $ref: "#/components/schemas/StatisticsResult"
+            diagonal:
+              $ref: "#/components/schemas/DiagonalResult"
+    HealthResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          required: [status, service]
+          properties:
+            status:
+              type: string
+              example: ok
+            service:
+              type: string
+              example: node-api
+    ErrorDetail:
+      type: object
+      properties:
+        field:
+          type: string
+        reason:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                $ref: "#/components/schemas/ErrorDetail"
+            requestId:
+              type: string

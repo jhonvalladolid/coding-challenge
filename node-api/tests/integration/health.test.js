@@ -25,3 +25,12 @@ describe('GET /health', () => {
     expect(response.headers['x-request-id']).toBe('health-trace-1');
   });
 });
+
+describe('GET /docs', () => {
+  it('serves Swagger UI', async () => {
+    const response = await request(app).get('/docs/');
+
+    expect(response.status).toBe(200);
+    expect(response.text).toEqual(expect.stringContaining('swagger'));
+  });
+});

@@ -109,6 +109,38 @@ func TestHealthReusesRequestID(t *testing.T) {
 	}
 }
 
+func TestDocs(t *testing.T) {
+	app := matrix.NewApp(config.Config{AppEnv: "test", MaxMatrixDim: 200}, statsStub{})
+
+	yamlReq := httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil)
+	yamlResp, err := app.Test(yamlReq, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer yamlResp.Body.Close()
+	if yamlResp.StatusCode != http.StatusOK {
+		t.Fatalf("openapi status=%d", yamlResp.StatusCode)
+	}
+	yamlBody, _ := io.ReadAll(yamlResp.Body)
+	if !bytes.Contains(yamlBody, []byte("openapi:")) {
+		t.Fatalf("expected openapi spec, got %s", yamlBody)
+	}
+
+	docsReq := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	docsResp, err := app.Test(docsReq, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer docsResp.Body.Close()
+	if docsResp.StatusCode != http.StatusOK {
+		t.Fatalf("docs status=%d", docsResp.StatusCode)
+	}
+	html, _ := io.ReadAll(docsResp.Body)
+	if !bytes.Contains(html, []byte("swagger-ui")) {
+		t.Fatalf("expected swagger ui html, got %s", html)
+	}
+}
+
 func TestFactorizeSuccess(t *testing.T) {
 	body := `{
 		"matrix": [

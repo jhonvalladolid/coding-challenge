@@ -3,6 +3,7 @@ package matrix
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"go-api/docs"
 	"go-api/internal/config"
 	apperr "go-api/internal/errors"
 	"go-api/internal/middleware"
@@ -27,6 +28,7 @@ func NewApp(cfg config.Config, stats StatisticsProvider) *fiber.App {
 
 	app.Use(recover.New())
 	app.Use(middleware.RequestID())
+	docs.Register(app)
 
 	handler := NewHandler(NewService(cfg.MaxMatrixDim, stats))
 	app.Get("/health", handler.Health)

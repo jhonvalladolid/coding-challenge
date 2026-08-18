@@ -99,3 +99,35 @@ func NotFound() *AppError {
 		StatusCode: 404,
 	}
 }
+
+func StatisticsServiceUnavailable() *AppError {
+	return &AppError{
+		Code:       "STATISTICS_SERVICE_UNAVAILABLE",
+		Message:    "The statistics service is unavailable.",
+		StatusCode: 503,
+	}
+}
+
+func StatisticsServiceTimeout() *AppError {
+	return &AppError{
+		Code:       "STATISTICS_SERVICE_TIMEOUT",
+		Message:    "The statistics service timed out.",
+		StatusCode: 504,
+	}
+}
+
+func StatisticsServiceBadResponse() *AppError {
+	return &AppError{
+		Code:       "STATISTICS_SERVICE_BAD_RESPONSE",
+		Message:    "The statistics service returned an invalid response.",
+		StatusCode: 502,
+	}
+}
+
+func StatisticsServiceError() *AppError {
+	return &AppError{
+		Code:       "STATISTICS_SERVICE_ERROR",
+		Message:    "The statistics service failed to process the request.",
+		StatusCode: 502,
+	}
+}

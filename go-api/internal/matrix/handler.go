@@ -17,9 +17,10 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func NewApp(cfg config.Config) *fiber.App {
+func NewApp(cfg config.Config, stats StatisticsProvider) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ErrorHandler:          middleware.ErrorHandler,
+		JSONEncoder:           response.Marshal,
 		BodyLimit:             1024 * 1024,
 		DisableStartupMessage: cfg.AppEnv == "test",
 	})
@@ -27,7 +28,7 @@ func NewApp(cfg config.Config) *fiber.App {
 	app.Use(recover.New())
 	app.Use(middleware.RequestID())
 
-	handler := NewHandler(NewService(cfg.MaxMatrixDim))
+	handler := NewHandler(NewService(cfg.MaxMatrixDim, stats))
 	app.Get("/health", handler.Health)
 	app.Post("/api/v1/matrices/qr", handler.Factorize)
 
@@ -47,7 +48,8 @@ func (h *Handler) Factorize(c *fiber.Ctx) error {
 		return apperr.InvalidRequestBody()
 	}
 
-	result, err := h.service.Factorize(req.Matrix)
+	requestID, _ := c.Locals(response.RequestIDLocalsKey).(string)
+	result, err := h.service.ProcessQR(c.UserContext(), requestID, req.Matrix)
 	if err != nil {
 		return err
 	}

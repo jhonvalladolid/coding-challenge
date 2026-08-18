@@ -2,26 +2,44 @@ package config
 
 import (
 	"bufio"
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
-	AppEnv       string
-	Port         string
-	MaxMatrixDim int
+	AppEnv               string
+	Port                 string
+	MaxMatrixDim         int
+	StatisticsAPIURL     string
+	StatisticsAPITimeout time.Duration
 }
 
 func Load() Config {
 	loadDotEnv()
 
 	return Config{
-		AppEnv:       getenv("APP_ENV", "development"),
-		Port:         getenv("PORT", "8080"),
-		MaxMatrixDim: getenvInt("MAX_MATRIX_DIM", 200),
+		AppEnv:               getenv("APP_ENV", "development"),
+		Port:                 getenv("PORT", "8080"),
+		MaxMatrixDim:         getenvInt("MAX_MATRIX_DIM", 200),
+		StatisticsAPIURL:     getenv("STATISTICS_API_URL", "http://localhost:3000"),
+		StatisticsAPITimeout: getenvDuration("STATISTICS_API_TIMEOUT", 5*time.Second),
 	}
+}
+
+func (c Config) Validate() error {
+	parsed, err := url.Parse(c.StatisticsAPIURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("STATISTICS_API_URL must be an absolute URL")
+	}
+	if c.StatisticsAPITimeout <= 0 {
+		return fmt.Errorf("STATISTICS_API_TIMEOUT must be a positive duration")
+	}
+	return nil
 }
 
 func getenv(key, fallback string) string {
@@ -29,6 +47,20 @@ func getenv(key, fallback string) string {
 	if value == "" {
 		return fallback
 	}
+	return value
+}
+
+func getenvDuration(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+
+	value, err := time.ParseDuration(raw)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+
 	return value
 }
 

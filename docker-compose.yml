@@ -1,0 +1,43 @@
+services:
+  node-api:
+    build:
+      context: ./node-api
+    ports:
+      - "${NODE_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      APP_ENV: production
+      PORT: "3000"
+      LOG_LEVEL: info
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  go-api:
+    build:
+      context: ./go-api
+    ports:
+      - "${GO_PORT:-8080}:8080"
+    environment:
+      APP_ENV: production
+      PORT: "8080"
+      STATISTICS_API_URL: http://node-api:3000
+      STATISTICS_API_TIMEOUT: ${STATISTICS_API_TIMEOUT:-5s}
+    depends_on:
+      node-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
